@@ -1,0 +1,94 @@
+
+cat > home_page.html <<EOL
+<html>
+<body>
+<p>Welcome to the home page!</p>
+</body>
+</html>
+EOL
+
+python3 -m http.server & // for running http server usinng python 3
+
+
+cat > first_output.py << 'EOF'
+print("👋 Hello! I'm your Python program!")
+print("I can display information on the screen.")
+print("This is called 'output' - it's how I communicate with you!")
+EOF
+python 3 first_output.py
+
+
+cat > text_vs_numbers.py << 'EOF'
+print("This is text (called a string)")
+print(42)
+print("42")
+print(3.14)
+
+print("\nNotice the differences:")
+print("Text must be in quotes:", "Hello")
+print("Numbers don't need quotes:", 123)
+print("Mathematical operations work with numbers:", 10 + 5)
+print("Text operations work with strings:", "Hello" + " " + "World")
+EOF
+
+cat > mixing_output.py << 'EOF'
+print("🎂 Welcome to the Birthday Calculator!")
+
+age = 25
+name = "Alice"
+
+print("Name:", name)
+print("Age:", age)
+print("Next year you'll be:", age + 1)
+print("In 10 years, you'll be", age + 10, "years old!")
+
+# You can mix many things
+print("Summary:", name, "is", age, "years old")
+EOF
+
+cat > formatted_output.py << 'EOF'
+print("💰 Personal Finance Summary")
+
+name = "John"
+salary = 75000
+expenses = 45000
+savings = salary - expenses
+
+# Using f-strings for neat formatting
+print(f"Hello {name}!")
+print(f"Annual salary: ${salary:,}")
+print(f"Annual expenses: ${expenses:,}")
+print(f"Annual savings: ${savings:,}")
+
+# Calculate percentages
+savings_rate = (savings / salary) * 100
+print(f"Savings rate: {savings_rate:.1f}%")
+
+# Create a nice summary
+print(f"\n📊 {name}'s Financial Health:")
+if savings_rate > 20:
+    print(f"   Excellent! You're saving {savings_rate:.1f}% of your income!")
+else:
+    print(f"   You're saving {savings_rate:.1f}%. Consider increasing to 20%+")
+EOF
+
+cat > range_checker.py << 'EOF'
+print("🎯 Number Range Checker")
+
+number = float(input("Enter a number: "))
+
+if number >= 1 and number <= 10:
+    print(f"✅ {number} is between 1 and 10!")
+    print("   This number is in the valid range.")
+elif number >= 11 and number <= 20:
+    print(f"📈 {number} is between 11 and 20!")
+    print("   This is in the higher range.")
+elif number >= 0 and number < 1:
+    print(f"🔸 {number} is between 0 and 1!")
+    print("   This is a small positive number.")
+else:
+    print(f"🔍 {number} is outside our ranges!")
+    print("   This number is either negative or greater than 20.")
+
+print(f"\n💫 You entered: {number}")
+EOF
