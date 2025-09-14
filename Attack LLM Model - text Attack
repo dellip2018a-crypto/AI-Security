@@ -1,0 +1,317 @@
+cat > requirements.txt <<EOF
+torch==2.6.0
+transformers==4.49.0
+datasets==3.3.1
+nltk==3.9.1
+scikit-learn==1.6.1
+tensorflow==2.15.0
+tensorflow-hub==0.15.0
+tensorflow-text==2.15.0
+tf-keras==2.15.1
+tensorflow-estimator==2.15.0
+keras==2.15.0
+textattack==0.3.10
+EOF
+pip install --upgrade pip
+pip install -r requirements.txt
+
+cat > sentiment_classifier.py <<'EOF'
+# Import necessary libraries
+import torch
+from transformers import DistilBertTokenizer, DistilBertForSequenceClassification
+from torch.nn.functional import softmax
+
+model_name = "distilbert-base-uncased-finetuned-sst-2-english"
+revision = "714eb0fa89d2f80546fda750413ed43d93601a13"
+
+# Check if CUDA is available and set device
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"Using device: {device}")
+
+# Initialize tokenizer and model
+tokenizer = DistilBertTokenizer.from_pretrained(model_name, revision=revision)
+model = DistilBertForSequenceClassification.from_pretrained(model_name, revision=revision)
+
+# Move model to the appropriate device
+model = model.to(device)
+
+# Set model to evaluation mode
+model.eval()
+
+# Function to predict sentiment
+def predict_sentiment(text):
+    # Tokenize input
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
+
+    # Move inputs to the same device as the model
+    inputs = {key: value.to(device) for key, value in inputs.items()}
+
+    # Get prediction
+    with torch.no_grad():
+        outputs = model(**inputs)
+        predictions = softmax(outputs.logits, dim=1)
+
+    # Get probabilities for positive and negative classes
+    negative_prob = predictions[0][0].item()
+    positive_prob = predictions[0][1].item()
+
+    # Determine sentiment label based on probability
+    label = "POSITIVE" if positive_prob > negative_prob else "NEGATIVE"
+    confidence = positive_prob if label == "POSITIVE" else negative_prob
+
+    return {
+        "label": label,
+        "confidence": confidence,
+        "probabilities": {
+            "negative": negative_prob,
+            "positive": positive_prob
+        }
+    }
+EOF
+
+
+cat > test_sentiment.py <<'EOF'
+# Import our sentiment classifier
+from sentiment_classifier import predict_sentiment
+
+# Sample texts to test
+sample_texts = [
+    "This movie is great and amazing!",
+    "This was a terrible waste of time.",
+    "I really enjoyed watching this film.",
+    "The worst movie I've ever seen."
+]
+
+# Test the classifier on each sample
+print("Testing Sentiment Classifier\n")
+print("-" * 50)
+
+for text in sample_texts:
+    result = predict_sentiment(text)
+
+    print(f"Text: {text}")
+    print(f"Sentiment: {result['label']}")
+    print(f"Confidence: {result['confidence']:.4f}")
+    print(f"Negative probability: {result['probabilities']['negative']:.4f}")
+    print(f"Positive probability: {result['probabilities']['positive']:.4f}")
+    print("-" * 50)
+EOF
+python3 test_sentiment.py
+
+--------------------------------------------------
+Text: This movie is great and amazing!
+Sentiment: POSITIVE
+Confidence: 0.9999
+Negative probability: 0.0001
+Positive probability: 0.9999
+--------------------------------------------------
+Text: This was a terrible waste of time.
+Sentiment: NEGATIVE
+Confidence: 0.9998
+Negative probability: 0.9998
+Positive probability: 0.0002
+--------------------------------------------------
+Text: I really enjoyed watching this film.
+Sentiment: POSITIVE
+Confidence: 0.9998
+Negative probability: 0.0002
+Positive probability: 0.9998
+--------------------------------------------------
+
+
+cat > textattack_wrapper.py <<'EOF'
+# Import required libraries
+import torch
+from textattack.models.wrappers import ModelWrapper
+from sentiment_classifier import predict_sentiment
+# Import the actual model for TextAttack compatibility
+from sentiment_classifier import model
+
+# Create a wrapper class for TextAttack
+class SentimentWrapper(ModelWrapper):
+    def __init__(self):
+        # Set the model attribute that TextAttack expects
+        self.model = model
+
+    def __call__(self, text_inputs):
+        # Convert input texts to model predictions using our custom classifier
+        outputs = []
+        for text in text_inputs:
+
+
+cat > textattack_wrapper.py <<'EOF'
+# Import required libraries
+import torch
+from textattack.models.wrappers import ModelWrapper
+from sentiment_classifier import predict_sentiment
+# Import the actual model for TextAttack compatibility
+from sentiment_classifier import model
+
+# Create a wrapper class for TextAttack
+class SentimentWrapper(ModelWrapper):
+    def __init__(self):
+        # Set the model attribute that TextAttack expects
+        self.model = model
+
+    def __call__(self, text_inputs):
+        # Convert input texts to model predictions using our custom classifier
+        outputs = []
+        for text in text_inputs:
+            # Get prediction from our custom sentiment classifier
+            result = predict_sentiment(text)
+
+            # Convert prediction to probability format expected by TextAttack
+            # TextAttack expects [negative_prob, positive_prob]
+            negative_prob = result['probabilities']['negative']
+            positive_prob = result['probabilities']['positive']
+            probs = [negative_prob, positive_prob]
+
+            outputs.append(probs)
+
+        # Return tensor of predictions
+        return torch.tensor(outputs)
+EOF
+            # Get prediction from our custom sentiment classifier
+            result = predict_sentiment(text)
+
+            # Convert prediction to probability format expected by TextAttack
+            # TextAttack expects [negative_prob, positive_prob]
+            negative_prob = result['probabilities']['negative']
+            positive_prob = result['probabilities']['positive']
+            probs = [negative_prob, positive_prob]
+
+            outputs.append(probs)
+
+        # Return tensor of predictions
+        return torch.tensor(outputs)
+EOF
+Text: The worst movie I've ever seen.
+Sentiment: NEGATIVE
+Confidence: 0.9998
+Negative probability: 0.9998
+Positive probability: 0.0002
+--------------------------------------------------
+cat > run_attack.py <<'EOF'
+# Import required libraries
+import torch
+from textattack.attack_recipes import TextFoolerJin2019
+from textattack import Attacker, AttackArgs
+from textattack.datasets import Dataset
+from textattack.attack_results import SuccessfulAttackResult, FailedAttackResult
+from textattack_wrapper import SentimentWrapper
+
+# Initialize the model wrapper
+print("Initializing model wrapper...")
+model_wrapper = SentimentWrapper()
+EOF
+
+cat >> run_attack.py <<'EOF'
+
+# Create a small dataset of examples to attack
+# Format: (text, label) where label is 0 for negative, 1 for positive
+examples = [
+    ("This movie is great and amazing!", 1),
+    ("This was a terrible waste of time.", 0),
+    ("I really enjoyed watching this film.", 1),
+    ("The worst movie I've ever seen.", 0)
+]
+
+# Convert to TextAttack dataset format
+dataset = Dataset(examples)
+EOF
+
+cat >> run_attack.py <<'EOF'
+
+# Create the TextFooler attack
+print("Creating attack...")
+attack = TextFoolerJin2019.build(model_wrapper)
+
+# Set up attack arguments
+print("Setting up attack arguments...")
+attack_args = AttackArgs(
+    num_examples=4,  # Number of examples to attack
+    log_to_csv="attack_results.csv",  # Save results to CSV file
+    checkpoint_interval=2,  # Save a checkpoint every 2 examples
+    disable_stdout=False  # Show output in terminal
+)
+
+# Start the attack
+print("Starting attack...")
+attacker = Attacker(attack, dataset, attack_args)
+results = attacker.attack_dataset()
+EOF
+
+cat >> run_attack.py <<'EOF'
+
+# Custom analysis of results
+print("\nCustom Attack Results Summary:")
+print("-" * 50)
+
+# Initialize counters
+successful = 0
+failed = 0
+total_words_changed = 0
+total_words = 0
+
+# Detailed analysis of each result
+print("\nDetailed Results:")
+print("-" * 50)
+for i, result in enumerate(results, 1):
+    print(f"\nExample {i}:")
+
+    # Get the original text
+    original_text = str(result.original_result.attacked_text)
+    print(f"Original text: {original_text}")
+
+    # Check if attack was successful
+    if isinstance(result, SuccessfulAttackResult):
+        # Get the perturbed text
+        perturbed_text = str(result.perturbed_result.attacked_text)
+        print(f"Perturbed text: {perturbed_text}")
+
+        # Calculate word changes
+        orig_words = original_text.split()
+        pert_words = perturbed_text.split()
+
+        # Simple word change calculation
+        words_changed = sum(1 for o, p in zip(orig_words, pert_words) if o != p)
+        if len(orig_words) != len(pert_words):
+            words_changed += abs(len(orig_words) - len(pert_words))
+
+        # Update counters
+        successful += 1
+        total_words_changed += words_changed
+        total_words += len(orig_words)
+
+        # Print statistics
+        print(f"Words changed: {words_changed}")
+        print(f"Modification rate: {words_changed/len(orig_words):.2%}")
+    else:
+        print("Attack failed")
+        failed += 1
+
+    print("-" * 30)
+EOF
+
+cat >> run_attack.py <<'EOF'
+
+# Print summary statistics
+print("\nSummary Statistics:")
+print("-" * 50)
+print(f"Number of successful attacks: {successful}")
+print(f"Number of failed attacks: {failed}")
+print(f"Success rate: {(successful/len(results)):.2%}")
+
+if successful > 0:
+    print(f"Average word modification rate: {(total_words_changed/total_words):.2%}")
+
+# Save results to file
+with open("attack_summary.txt", "w") as f:
+    f.write("Attack Results Summary\n")
+    f.write("-" * 50 + "\n")
+    f.write(f"Number of successful attacks: {successful}\n")
+    f.write(f"Number of failed attacks: {failed}\n")
+    f.write(f"Success rate: {(successful/len(results)):.2%}\n")
+    if successful > 0:
+        f.write(f"Average word modification rate: {(total_words_changed/total_words):.2%}\n")
+EOF
